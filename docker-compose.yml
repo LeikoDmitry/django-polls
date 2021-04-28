@@ -1,0 +1,70 @@
+version: '3'
+
+services:
+
+  python: &python
+    image: python/local
+    build: ./docker/python
+    environment:
+      USER: $DATABASE_USER
+      PASSWORD: $DATABASE_PASSWORD
+      DATABASE_NAME: $DATABASE_NAME
+    volumes:
+      - .:/code
+    ports:
+      - 8000:8000
+    command: python manage.py runserver 0.0.0.0:8000
+    depends_on:
+      - database
+      - rabbitmq
+      - celery_worker
+    networks:
+      - app-network
+
+  database:
+    image: postgres:13-alpine
+    environment:
+      POSTGRES_USER: $DATABASE_USER
+      POSTGRES_PASSWORD: $DATABASE_PASSWORD
+      POSTGRES_DB: $DATABASE_NAME
+    ports: [5432:5432]
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+
+  rabbitmq:
+    image: rabbitmq:3.8-management
+    ports:
+      - 5672:5672
+      - 8080:15672
+    environment:
+      RABBITMQ_DEFAULT_USER: $RABBITMQ_DEFAULT_USER
+      RABBITMQ_DEFAULT_PASS: $RABBITMQ_DEFAULT_PASS
+    networks:
+      - app-network
+
+  celery_worker:
+    <<: *python
+    command: celery -A polls worker --loglevel=INFO
+    volumes:
+      - .:/code
+    ports: []
+    depends_on:
+      - rabbitmq
+      - database
+    networks:
+      - app-network
+
+  swaager_valdation:
+    image: swaggerapi/swagger-validator
+    ports:
+      - 8189:8080
+
+volumes:
+  db_data: {}
+
+networks:
+  app-network:
+    driver: bridge
